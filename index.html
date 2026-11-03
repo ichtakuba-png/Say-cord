@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SAYCORD MOD</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#080b13;color:#edf3ff;
+ font-family:Arial,sans-serif
+}
+header{
+ height:65px;background:#101827;
+ border-bottom:1px solid #263850;
+ display:flex;align-items:center;
+ justify-content:space-between;padding:0 18px
+}
+.logo{font-size:25px;font-weight:900;color:#269cff}
+main{max-width:700px;margin:35px auto;padding:15px}
+.card{
+ background:#101827;border:1px solid #344158;
+ border-radius:18px;padding:25px;margin-bottom:20px
+}
+.hero{text-align:center;padding:45px 20px}
+h1{font-size:36px;color:#43a5ff}
+h2{font-size:21px}
+.muted{color:#8d9bb2}
+input{
+ width:100%;padding:16px;margin:9px 0 18px;
+ border-radius:10px;border:1px solid #344963;
+ background:#080f1d;color:white;font-size:15px;
+ outline:none
+}
+input:focus{border-color:#269cff}
+label{font-size:14px;font-weight:bold;color:#a9c9ee}
+button{
+ padding:14px 20px;border:0;border-radius:11px;
+ background:#168cff;color:white;font-weight:bold;
+ font-size:15px;cursor:pointer
+}
+button:active{opacity:.8}
+.primary{width:100%}
+.secondary{
+ background:#1a2b43;border:1px solid #34516f;
+ width:100%;margin-top:10px
+}
+.hidden{display:none}
+.profile{display:flex;align-items:center;gap:15px}
+.avatar{width:65px;height:65px;border-radius:50%}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.item{background:#18263b;padding:18px;border-radius:12px}
+.status{font-size:13px;color:#8d9bb2;margin-top:15px}
+@media(max-width:500px){
+ .grid{grid-template-columns:1fr}
+ h1{font-size:29px}
+}
+</style>
+</head>
+<body>
+
+<header>
+ <div class="logo">SAYCORD</div>
+ <button onclick="loginDiscord()">LOGIN WITH DISCORD</button>
+</header>
+
+<main>
+
+<section class="card">
+ <h2>⚙ SAYCORD CONFIGURATION</h2>
+ <p class="muted">Cấu hình Discord OAuth2</p>
+
+ <label>CLIENT ID</label>
+ <input id="clientId" placeholder="Nhập Discord Application ID">
+
+ <label>REDIRECT URL</label>
+ <input id="redirectUrl" placeholder="https://example.com/">
+
+ <button class="primary" onclick="saveConfig()">
+ LƯU CẤU HÌNH
+ </button>
+
+ <p id="status" class="status">Chưa lưu cấu hình</p>
+</section>
+
+<section id="welcome" class="card hero">
+ <h1>SAYCORD MOD</h1>
+ <p class="muted">Your Discord. Your experience.</p>
+ <p>Discord OAuth2 Authentication</p>
+ <button onclick="loginDiscord()">ĐĂNG NHẬP DISCORD</button>
+ <p class="muted">Đăng nhập trên Discord chính chủ.</p>
+</section>
+
+<section id="dashboard" class="hidden">
+ <div class="card">
+  <div class="profile">
+   <img id="avatar" class="avatar">
+   <div>
+    <h2 id="username">User</h2>
+    <p id="userid" class="muted"></p>
+   </div>
+  </div>
+ </div>
+
+ <div class="grid">
+  <div class="item"><h3>👥 Friends</h3><p>Friends interface</p></div>
+  <div class="item"><h3>🌐 Servers</h3><p id="servers">Loading...</p></div>
+  <div class="item"><h3>💬 Messages</h3><p>Chat interface</p></div>
+  <div class="item"><h3>⚙ Settings</h3><p>Account settings</p></div>
+ </div>
+
+ <div class="card">
+  <h3>ACCOUNT INFORMATION</h3>
+  <p id="details"></p>
+  <button class="primary" onclick="logout()">LOGOUT</button>
+ </div>
+</section>
+
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+$("clientId").value=localStorage.getItem("saycord_client_id")||"";
+$("redirectUrl").value=localStorage.getItem("saycord_redirect_url")||"";
+
+function saveConfig(){
+ const id=$("clientId").value.trim();
+ const url=$("redirectUrl").value.trim();
+
+ if(!id||!url){
+  alert("Vui lòng nhập CLIENT ID và REDIRECT URL");
+  return;
+ }
+
+ try{
+  const parsed=new URL(url);
+  if(!["https:","http:"].includes(parsed.protocol))throw Error();
+ }catch{
+  alert("REDIRECT URL không hợp lệ");
+  return;
+ }
+
+ localStorage.setItem("saycord_client_id",id);
+ localStorage.setItem("saycord_redirect_url",url);
+ $("status").textContent="✓ Đã lưu cấu hình";
+}
+
+const KEY="saycord_verifier";
+
+function randomString(){
+ const a=new Uint8Array(64);
+ crypto.getRandomValues(a);
+ return Array.from(a,x=>"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"[x%66]).join("");
+}
+
+async function challenge(value){
+ const hash=await crypto.subtle.digest(
+  "SHA-256",new TextEncoder().encode(value)
+ );
+ return btoa(String.fromCharCode(...new Uint8Array(hash)))
+ .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+
+async function loginDiscord(){
+ const id=$("clientId").value.trim();
+ const redirect=$("redirectUrl").value.trim();
+
+ if(!id||!redirect){
+  alert("Hãy nhập CLIENT ID và REDIRECT URL trước!");
+  return;
+ }
+
+ saveConfig();
+
+ if(location.origin!==new URL(redirect).origin||
+    location.pathname!==new URL(redirect).pathname){
+  alert("REDIRECT URL phải trỏ về đúng trang SAYCORD hiện tại.");
+  return;
+ }
+
+ const verifier=randomString();
+ sessionStorage.setItem(KEY,verifier);
+
+ const params=new URLSearchParams({
+  client_id:id,
+  response_type:"code",
+  redirect_uri:redirect,
+  scope:"identify guilds",
+  code_challenge:await challenge(verifier),
+  code_challenge_method:"S256"
+ });
+
+ location.href="https://discord.com/oauth2/authorize?"+params;
+}
+
+async function api(path){
+ const token=sessionStorage.getItem("saycord_token");
+ const res=await fetch("https://discord.com/api/v10"+path,{
+  headers:{Authorization:"Bearer "+token}
+ });
+ if(!res.ok)throw Error("Discord API "+res.status);
+ return res.json();
+}
+
+async function callback(){
+ const params=new URLSearchParams(location.search);
+ const code=params.get("code");
+ if(!code)return;
+
+ const verifier=sessionStorage.getItem(KEY);
+ const id=localStorage.getItem("saycord_client_id");
+ const redirect=localStorage.getItem("saycord_redirect_url");
+
+ if(!verifier||!id||!redirect)return;
+
+ try{
+  const res=await fetch("https://discord.com/api/v10/oauth2/token",{
+   method:"POST",
+   headers:{"Content-Type":"application/x-www-form-urlencoded"},
+   body:new URLSearchParams({
+    client_id:id,
+    grant_type:"authorization_code",
+    code,
+    redirect_uri:redirect,
+    code_verifier:verifier
+   })
+  });
+
+  const data=await res.json();
+  if(!res.ok)throw Error(data.error_description||data.error);
+
+  sessionStorage.setItem("saycord_token",data.access_token);
+  sessionStorage.removeItem(KEY);
+  history.replaceState({},document.title,redirect);
+  await loadAccount();
+ }catch(e){
+  alert("Đăng nhập thất bại: "+e.message);
+ }
+}
+
+async function loadAccount(){
+ try{
+  const user=await api("/users/@me");
+  const guilds=await api("/users/@me/guilds");
+
+  $("welcome").classList.add("hidden");
+  $("dashboard").classList.remove("hidden");
+  $("username").textContent=user.global_name||user.username;
+  $("userid").textContent="ID: "+user.id;
+  $("avatar").src=user.avatar
+   ?"https://cdn.discordapp.com/avatars/"+user.id+"/"+user.avatar+".png"
+   :"https://cdn.discordapp.com/embed/avatars/0.png";
+  $("servers").textContent=guilds.length+" servers";
+  $("details").textContent="Username: "+user.username+" | ID: "+user.id;
+ }catch(e){
+  logout();
+  alert("Không tải được tài khoản: "+e.message);
+ }
+}
+
+function logout(){
+ sessionStorage.removeItem("saycord_token");
+ sessionStorage.removeItem(KEY);
+ location.reload();
+}
+
+if(sessionStorage.getItem("saycord_token"))loadAccount();
+else callback();
+</script>
+</body>
+</html>
